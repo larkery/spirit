@@ -1,0 +1,13 @@
+ha/light.turn_on: lights [on] | turn on [the] lights;
+ha/light.turn_off: lights off | turn off [the] lights;
+ha/light.turn_on: brightness {brightness_pct: <integer>} percent;
+ha/squeezebox.call_method {:command "randomplay" :parameters ["albums"]} : music [on] | play [some] music | play something else;
+ha/media_player.turn_off: stop [music];
+ha/media_player.media_next_track: skip track | next track;
+ha/media_player.volume_up: volume up | louder;
+ha/media_player.volume_down: volume down | quieter;
+ha/script.volume_set: volume {volume_level: <integer>} percent;
+timer/set: set [a] timer for {time: <time>};
+timer/cancel: cancel timer | cancel timer {n: <integer>};
+timer/list: [what is the] remaining time | [what is the] time left | how much time is left;
+query/time: what time is it | what is the time;
