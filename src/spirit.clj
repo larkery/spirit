@@ -187,17 +187,18 @@
 
 (defn run [{:keys [grammar config]}]
   (binding [*config* (edn/read (java.io.PushbackReader.
-                                (io/reader (io/as-file config))))])
-  (let [parser (load-grammar grammar)]
-    (loop []
-      (let [line (read-line)]
-        (when (string/starts-with? line "COM ")
-          (let [result (parser (subs line 4))]
-            (if (insta/failure? result)
-              (println "nope" line result)
-              (handle-command result)))))
-      (recur))))
+                                (io/reader (io/as-file config))))]
+    (let [parser (load-grammar grammar)]
+      (loop []
+        (let [line (read-line)]
+          (when (string/starts-with? line "COM ")
+            (let [result (parser (subs line 4))]
+              (if (insta/failure? result)
+                (println "nope" line result)
+                (handle-command result)))))
+        (recur)))))
 
 
 (defn -main [grammar config]
   (run {:grammar grammar :config config}))
+
