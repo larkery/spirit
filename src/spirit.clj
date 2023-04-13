@@ -199,5 +199,5 @@
       (recur))))
 
 
-(defn- main [grammar config]
+(defn -main [grammar config]
   (run {:grammar grammar :config config}))
