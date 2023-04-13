@@ -5,7 +5,8 @@
             [instaparse.combinators :as c]
             [clojure.string :as string]
             [clj-fuzzy.metrics :refer [levenshtein]]
-            [hato.client :as http]))
+            [hato.client :as http])
+  (:gen-class))
 
 (def metagrammar (insta/parser (io/resource "metagrammar.g")))
 (def builtins    (insta/parser (io/resource "builtins.g")))
@@ -126,7 +127,7 @@
        {:accept :json
         :as :json
         :content-type :json
-        :form-params (merge default-body body)
+        :form-params body
         :headers {"Authorization" (format "Bearer %s"
                                           (:ha/token *config*))}})
       
@@ -198,4 +199,5 @@
       (recur))))
 
 
-
+(defn- main [grammar config]
+  (run {:grammar grammar :config config}))
