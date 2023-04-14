@@ -16,7 +16,8 @@
 
 (defn normalize [s]
   (-> s
-      (string/replace #"[. ,-?!]+" " ")
+      
+      (string/replace #"[,.?! ]+" " ")
       (string/replace #"%" " percent")
       (string/lower-case)))
 
