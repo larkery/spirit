@@ -158,7 +158,11 @@
 
 (def ^:dynamic *config* {:ha/url ""
                          :ha/token ""
-                         :ha/args {}})
+                         :ha/args {}
+                         :lms/player-name ""
+                         :lms/server-name ""
+                         :sound-prefix ""
+                         })
 (defn ha-call [url body]
   (let [resp (http/post
               (str (:ha/url *config*) url)
@@ -172,41 +176,58 @@
     (log/info "CALL" url body "=>" (:status resp) (:body resp))
     resp))
 
-(defn lms [player command & args]
-  (loop [n 0]
-    (let [resp
-          (-> (ha-call "/services/squeezebox/call_query"
-                       (cond-> {:entity_id player :command (name command)}
-                         (seq args) (assoc :parameters (vec (map name args)))))
-              (:body))]
-      (if (and (= [] resp) (< n 5))
-        (do (Thread/sleep 750) (recur (inc n)))
-        (-> resp
-            (get 0)
-            (:attributes)
-            (:query_result))))))
+(defn lms [& command]
+  (let [resp (http/post
+              (:lms/server *config*)
+              {:accept :json
+               :as :json
+               :content-type :json
+               :form-params
+               {:method "slim.request"
+                :params [(:lms/player-mac *config*)
+                         (mapv name command)]}})]
+    (:result (:body resp))))
 
-(defn play-urls [player urls]
-  (let [mode (-> (lms player :mode :?) :_mode)
-        time (-> (lms player :time :?) :_time)]
+(defn lms-add-player-mac [config]
+  (let [players
+        (-> (http/post
+             (:lms/server config)
+             {:accept :json
+              :as :json
+              :content-type :json
+              :form-params
+              {:id 0
+               :method "slim.request"
+               :params ["" ["serverstatus" 0 100]]}})
+            (:body)
+            (:result)
+            (:players_loop)
+            (->> (map (juxt :name :playerid))
+                 (into {})))]
+    (assoc config :lms/player-mac (players (:lms/player-name config)))))
+
+(defn play-urls [urls]
+  (let [player (:lms/player-name *config*)
+        mode (-> (lms :mode :?) :_mode)
+        time (-> (lms :time :?) :_time)]
     (let [[[url title] & urls] urls]
-      (lms player :playlist :preview
+      (lms :playlist :preview
            (str "url:" url) (str "title:" title))
       (doseq [[url title] urls]
-        (lms player :playlist :add
+        (lms :playlist :add
              (str "url:" url) (str "title:" title))))
     
     (loop []
-      (Thread/sleep 1500)
-      (when (= "play" (:_mode (lms player :mode :?))) (recur)))
+      (Thread/sleep 300)
+      (when (= "play" (:_mode (lms :mode :?))) (recur)))
     
     (lms player :playlist :preview "cmd:stop")
     (when (= mode "play")
-      (lms player :play "1")
-      (Thread/sleep 1000)
+      (lms :play "1")
+      (Thread/sleep 100)
       (log/info "seek back to" time)
-      (lms player :time (str time))
-      (lms player :time (str time)))))
+      (lms :time (str time))
+      (lms :time (str time)))))
 
 (defn sound-url [sound]
   (case sound
@@ -223,7 +244,6 @@
 
 (defn speak [message]
   (play-urls
-   (:ha/media-player *config*)
    [[(tts-url message) message]]))
 
 (defmulti handle-command
@@ -238,9 +258,9 @@
                     (merge (:ha/args *config*) args)))
           player (:ha/media-player *config*)]
       (if (= 200 status)
-        (when-not (= "play" (:_mode (lms player :mode :?)))
-          (play-urls player [[(sound-url :success) "Success"]]))
-        (play-urls player [[(sound-url :command-error) "Command error"]])))))
+        (when-not (= "play" (:_mode (lms :mode :?)))
+          (play-urls [[(sound-url :success) "Success"]]))
+        (play-urls [[(sound-url :command-error) "Command error"]])))))
 
 (def timers (atom {}))
 
@@ -307,8 +327,10 @@
   (log/error "Unknown command" c))
 
 (defn run [{:keys [grammar config]}]
-  (binding [*config* (edn/read (java.io.PushbackReader.
-                                (io/reader (io/as-file config))))]
+  (binding [*config* (let [config
+                           (edn/read (java.io.PushbackReader.
+                                      (io/reader (io/as-file config))))]
+                       (lms-add-player-mac config))]
     (let [parser (load-grammar grammar)]
       (loop []
         (let [line (read-line)]
