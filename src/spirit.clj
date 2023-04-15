@@ -141,13 +141,13 @@
                     (merge
                      (into {} (for [[l l0 _] captures] [l (fn captures [v] [l0 v])]))
                      {:integer read-string
-                      :hours (fn [h & [m]] (+ (or m 0) 60 (* 60 h)))
+                      :hours   (fn [h & [m]] (+ (or m 0) 60 (* 60 h)))
                       :minutes (fn [m] (* 60 m))
                       :seconds identity
-                      :time identity
-                      :root (fn root [hs]
-                              {:command (first hs)
-                               :args (into {} (remove string? (rest hs)))})})
+                      :time    identity
+                      :root    (fn root [hs]
+                                 {:command (first hs)
+                                  :args    (into {} (remove string? (rest hs)))})})
 
                     (parse-with-fuzz parser line))]
 
