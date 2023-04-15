@@ -54,7 +54,9 @@
       (string/replace #"[,.?! ]+" " ")
       (replace-word-numbers)
       (string/replace #"%" " percent")
-      (string/lower-case)))
+      (string/lower-case)
+      (string/replace #" +" " ")
+      (string/trim)))
 
 (defn parse-with-fuzz [g s]
   (let [s (normalize s)
