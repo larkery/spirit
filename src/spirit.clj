@@ -221,7 +221,7 @@
       (Thread/sleep 300)
       (when (= "play" (:_mode (lms :mode :?))) (recur)))
     
-    (lms player :playlist :preview "cmd:stop")
+    (lms :playlist :preview "cmd:stop")
     (when (= mode "play")
       (lms :play "1")
       (Thread/sleep 100)
@@ -232,6 +232,7 @@
 (defn sound-url [sound]
   (case sound
     :command-error (str (:sound-prefix *config*) "/error.mp3")
+    :exception (str (:sound-prefix *config*) "/error.mp3")
     :success (str (:sound-prefix *config*) "/"
                   (first (shuffle ["chirp1" "chirp2"])) ".mp3")
     :chime (str (:sound-prefix *config*) "/chirp1.mp3")))
@@ -343,7 +344,11 @@
                      line result)
                     (speak (str "I don't understand " line)))
                 (do (log/info "Parsed" line "to" result)
-                    (handle-command result)))))
+                    (try (handle-command result)
+                         (catch Exception e
+                           (play-urls [[(sound-url :exception) "Exception!"]])
+                           (log/error e "in handling" result)))))))
+          
           (when-not (= line "quit") (recur)))))))
 
 (defn -main [grammar config]
