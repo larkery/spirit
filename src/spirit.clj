@@ -69,7 +69,7 @@
                  (filter (comp #{:string} :tag))
                  (map :expecting)
                  (map (fn find-l [e] [(levenshtein w e) e]))
-                 (filter (fn filter-l [%] (< (first %) (/ (count (second %)) 2))))
+                 (filter (fn filter-l [%] (< (first %) (max 5 (/ (count (second %)) 2)))))
                  (sort))
             ]
         (or (first (keep
