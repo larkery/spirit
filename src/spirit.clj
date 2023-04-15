@@ -13,11 +13,46 @@
 
 (def metagrammar (insta/parser (io/resource "metagrammar.g")))
 (def builtins    (insta/parser (io/resource "builtins.g")))
+(def word-number-re
+  (let [digit "(one|two|three|four|five|six|seven|eight|nine)"
+        ten   "(ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)"
+        tens  "(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)"
+        small (format "((?<tens>%s)( +(?<tendigit>%s))?|(?<digit>%s)|(?<ten>%s))" tens digit digit ten)
+        ]
+    (re-pattern small)))
+
+(def digit-values {"one"     1  "two"       2  "three"    3  "four"     4  "five"    5
+                   "six"     6  "seven"     7  "eight"    8  "nine"     9  "ten"     10
+                   "eleven"  11 "twelve"    12 "thirteen" 13 "fourteen" 14 "fifteen" 15
+                   "sixteen" 16 "seventeen" 17 "eighteen" 18 "nineteen" 19 "twenty"  20
+                   "thirty"  30 "forty"     40 "fifty"    50 "sixty"    60 "seventy" 70
+                   "eighty"  80 "ninety"    90})
+
+(defn replace-word-numbers [s]
+  (let [matcher (re-matcher word-number-re s)
+        sb (StringBuffer.)]
+    (loop []
+      (if (.find matcher)
+        (let [tens     (.group matcher "tens")
+              tendigit (.group matcher "tendigit")
+              digit    (.group matcher "digit")
+              ten      (.group matcher "ten")
+
+              rep (cond
+                    tens  (+ (digit-values tens) (if tendigit (digit-values tendigit) 0))
+                    digit (digit-values digit)
+                    ten   (digit-values ten))
+              
+              ]
+          (.appendReplacement matcher sb (str rep))
+          (recur))
+        (do (.appendTail matcher sb)
+            (.toString sb))))))
 
 (defn normalize [s]
   (-> s
-      
       (string/replace #"[,.?! ]+" " ")
+      (replace-word-numbers)
       (string/replace #"%" " percent")
       (string/lower-case)))
 
