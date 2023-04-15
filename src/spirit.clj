@@ -307,7 +307,6 @@
                                                  (swap! timers dissoc next-id)
                                                  (binding [*config* config]
                                                    (play-urls
-                                                    (:ha/media-player config)
                                                     [[(tts-url (format "Timer %s finished" next-id))
                                                       "Timer finished"]
                                                      [(sound-url :chime) "Chime"]]))))]))))
