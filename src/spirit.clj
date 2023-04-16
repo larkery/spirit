@@ -6,6 +6,7 @@
             [instaparse.combinators :as c]
             [clojure.string :as string]
             [clojure.java.shell :as sh]
+            [clojure.set :as set]
             [clj-fuzzy.metrics :refer [levenshtein]]
             [hato.client :as http]
             [chime.core :as chime]
@@ -14,7 +15,7 @@
             [ring.middleware.defaults :as rd]
             [ring.util.response :as rr]
             [ring.util.codec])
-  (:import [java.time Instant]
+  (:import [java.time Instant LocalTime]
            [java.security MessageDigest])
   (:gen-class))
 
@@ -337,6 +338,15 @@
                                              (time-difference now time))))]
                       (speak message)))))
 
+(let [digit-values (set/map-invert digit-values)]
+  (defmethod handle-command :query [{c :command}]
+    (case c
+      :query/time
+      (let [t (LocalTime/now)
+            h (.getHour t)
+            m (.getMinute t)]
+        (speak (str "the time is " (digit-values (mod h 12)) "-" (digit-values m)))))))
+
 (defmethod handle-command :default [c]
   (log/error "Unknown command" c))
 
@@ -346,10 +356,11 @@
     (format "%032x" (BigInteger. 1 raw))))
 
 (defn handler [{{message :message} :params}]
-  (let [m (md5 message)]
-    (println message m)
-    (sh/sh "mimic" "-t" message (str m ".wav") :dir "/tmp")
-    (-> (rr/file-response (str "/tmp/" m ".wav"))
+  (let [m (md5 message)
+        f (io/as-file (str "/tmp/" m ".wav"))]
+    (when-not (.exists f)
+      (sh/sh "mimic" "-t" message (str m ".wav") :dir "/tmp"))
+    (-> (rr/file-response f)
         (rr/content-type "audio/wav")
         (rr/header "Content-Disposition" "inline; filename=message.wav"))))
 
