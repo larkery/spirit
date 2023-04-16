@@ -5,10 +5,17 @@
             [instaparse.core :as insta]
             [instaparse.combinators :as c]
             [clojure.string :as string]
+            [clojure.java.shell :as sh]
             [clj-fuzzy.metrics :refer [levenshtein]]
             [hato.client :as http]
-            [chime.core :as chime])
-  (:import [java.time Instant])
+            [chime.core :as chime]
+
+            [ring.adapter.jetty :as rj]
+            [ring.middleware.defaults :as rd]
+            [ring.util.response :as rr]
+            [ring.util.codec])
+  (:import [java.time Instant]
+           [java.security MessageDigest])
   (:gen-class))
 
 (def metagrammar (insta/parser (io/resource "metagrammar.g")))
@@ -164,6 +171,8 @@
                          :lms/player-name ""
                          :lms/server-name ""
                          :sound-prefix ""
+                         :web/port 12346
+                         :web/address "http://slab.home:12346/"
                          })
 (defn ha-call [url body]
   (let [resp (http/post
@@ -239,11 +248,14 @@
                   (first (shuffle ["chirp1" "chirp2"])) ".mp3")
     :chime (str (:sound-prefix *config*) "/chirp1.mp3")))
 
+;; (defn tts-url [message]
+;;   (:url (:body (ha-call
+;;                 "/tts_get_url"
+;;                 {:platform "google_translate"
+;;                  :message message}))))
+
 (defn tts-url [message]
-  (:url (:body (ha-call
-                "/tts_get_url"
-                {:platform "google_translate"
-                 :message message}))))
+  (str (:web/address *config*) "?message=" (ring.util.codec/url-encode message)))
 
 (defn speak [message]
   (play-urls
@@ -328,11 +340,33 @@
 (defmethod handle-command :default [c]
   (log/error "Unknown command" c))
 
+(defn md5 [^String s]
+  (let [algorithm (MessageDigest/getInstance "MD5")
+        raw (.digest algorithm (.getBytes s))]
+    (format "%032x" (BigInteger. 1 raw))))
+
+(defn handler [{{message :message} :params}]
+  (let [m (md5 message)]
+    (println message m)
+    (sh/sh "mimic" "-t" message (str m ".wav") :dir "/tmp")
+    (-> (rr/file-response (str "/tmp/" m ".wav"))
+        (rr/content-type "audio/wav")
+        (rr/header "Content-Disposition" "inline; filename=message.wav"))))
+
+(defn run-http-server [port]
+  (rj/run-jetty
+   (rd/wrap-defaults
+    #'handler
+    rd/site-defaults)
+   {:port port :join? false}))
+
 (defn run [{:keys [grammar config]}]
   (binding [*config* (let [config
                            (edn/read (java.io.PushbackReader.
                                       (io/reader (io/as-file config))))]
                        (lms-add-player-mac config))]
+    (run-http-server (:web/port *config*))
+    
     (let [parser (load-grammar grammar)]
       (loop []
         (let [line (read-line)]
@@ -352,5 +386,9 @@
           
           (when-not (= line "quit") (recur)))))))
 
+
 (defn -main [grammar config]
   (run {:grammar grammar :config config}))
+
+(comment (def s (run-http-server 12346))
+         (.stop s))

@@ -5,6 +5,9 @@
   cheshire/cheshire {:mvn/version "5.11.0"}
   org.clojure/tools.logging {:mvn/version "1.2.4"}
   jarohen/chime {:mvn/version "0.3.3"}
+  ring/ring-core {:mvn/version "1.8.2"}
+  ring/ring-jetty-adapter {:mvn/version "1.8.2"}
+  ring/ring-defaults {:mvn/version "0.3.4"}
   }
  :aliases
  {:build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.4" :git/sha "76b78fe"}}
