@@ -360,7 +360,7 @@
         f (io/as-file (str "/tmp/" m ".wav"))]
     (when-not (.exists f)
       (sh/sh "mimic" "-t" message (str m ".wav") :dir "/tmp"))
-    (-> (rr/file-response f)
+    (-> (rr/file-response (.getCanonicalPath f))
         (rr/content-type "audio/wav")
         (rr/header "Content-Disposition" "inline; filename=message.wav"))))
 
