@@ -345,7 +345,10 @@
       (let [t (LocalTime/now)
             h (.getHour t)
             m (.getMinute t)]
-        (speak (str "the time is " (digit-values (mod h 12)) "-" (digit-values m)))))))
+        (speak (str "the time is "
+                    (digit-values (mod h 12)) " "
+                    (when (< m 10) "oh ")
+                    (digit-values m)))))))
 
 (defmethod handle-command :default [c]
   (log/error "Unknown command" c))
