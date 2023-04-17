@@ -226,7 +226,7 @@
                  (:players_loop)
                  (->> (map (juxt :name :modelname))
                       (into {}))
-                 (get player-name "FF:FF:FF:FF")))))
+                 (get player-name "unknown")))))
 
 (defn lms [& command]
   (let [{:lms/keys [server player-name]} *config*
@@ -255,7 +255,7 @@
     (lms :play)
     (Thread/sleep
      (case model
-       "RaopBridge" 3000
+       "RaopBridge" 1000
        500))
     
     (loop []
