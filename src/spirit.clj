@@ -210,6 +210,24 @@
                       (into {}))
                  (get player-name "FF:FF:FF:FF")))))
 
+(def lms-get-player-model
+  (memoize (fn get-player-mac [server-name player-name]
+             (-> (http/post
+                  server-name
+                  {:accept :json
+                   :as :json
+                   :content-type :json
+                   :form-params
+                   {:id 0
+                    :method "slim.request"
+                    :params ["" ["serverstatus" 0 100]]}})
+                 (:body)
+                 (:result)
+                 (:players_loop)
+                 (->> (map (juxt :name :modelname))
+                      (into {}))
+                 (get player-name "FF:FF:FF:FF")))))
+
 (defn lms [& command]
   (let [{:lms/keys [server player-name]} *config*
         player-mac (lms-get-player-mac server player-name)
@@ -224,7 +242,8 @@
     (:result (:body resp))))
 
 (defn play-urls [urls]
-  (let [player (:lms/player-name *config*)
+  (let [model  (lms-get-player-model (:lms/server *config*)
+                                     (:lms/player-name *config*))
         mode (-> (lms :mode :?) :_mode)
         time (-> (lms :time :?) :_time)]
     (let [[[url title] & urls] urls]
@@ -234,7 +253,11 @@
         (lms :playlist :add
              (str "url:" url) (str "title:" title))))
     (lms :play)
-    (Thread/sleep 1500)
+    (Thread/sleep
+     (case model
+       "RaopBridge" 3000
+       500))
+    
     (loop []
       (when (= "play" (:_mode (lms :mode :?)))
         (Thread/sleep 1000)
