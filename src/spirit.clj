@@ -14,7 +14,9 @@
             [ring.adapter.jetty :as rj]
             [ring.middleware.defaults :as rd]
             [ring.util.response :as rr]
-            [ring.util.codec])
+            [ring.util.codec]
+            [compojure.core :refer :all]
+            [compojure.route :as route])
   (:import [java.time Instant LocalTime]
            [java.security MessageDigest])
   (:gen-class))
@@ -29,12 +31,15 @@
         ]
     (re-pattern small)))
 
-(def digit-values {"one"     1  "two"       2  "three"    3  "four"     4  "five"    5
-                   "six"     6  "seven"     7  "eight"    8  "nine"     9  "ten"     10
-                   "eleven"  11 "twelve"    12 "thirteen" 13 "fourteen" 14 "fifteen" 15
-                   "sixteen" 16 "seventeen" 17 "eighteen" 18 "nineteen" 19 "twenty"  20
-                   "thirty"  30 "forty"     40 "fifty"    50 "sixty"    60 "seventy" 70
-                   "eighty"  80 "ninety"    90})
+(def digit-values
+  (let [fwd
+        {"one"     1  "two"       2  "three"    3  "four"     4  "five"    5
+         "six"     6  "seven"     7  "eight"    8  "nine"     9  "ten"     10
+         "eleven"  11 "twelve"    12 "thirteen" 13 "fourteen" 14 "fifteen" 15
+         "sixteen" 16 "seventeen" 17 "eighteen" 18 "nineteen" 19 "twenty"  20
+         "thirty"  30 "forty"     40 "fifty"    50 "sixty"    60 "seventy" 70
+         "eighty"  80 "ninety"    90}]
+    (merge fwd (set/map-invert fwd))))
 
 (defn replace-word-numbers [s]
   (let [matcher (re-matcher word-number-re s)
@@ -170,8 +175,7 @@
                          :ha/token ""
                          :ha/args {}
                          :lms/player-name ""
-                         :lms/server-name ""
-                         :sound-prefix ""
+                         :lms/server ""
                          :web/port 12346
                          :web/address "http://slab.home:12346/"
                          })
@@ -188,35 +192,36 @@
     (log/info "CALL" url body "=>" (:status resp) (:body resp))
     resp))
 
+(def lms-get-player-mac
+  (memoize (fn get-player-mac [server-name player-name]
+             (-> (http/post
+                  server-name
+                  {:accept :json
+                   :as :json
+                   :content-type :json
+                   :form-params
+                   {:id 0
+                    :method "slim.request"
+                    :params ["" ["serverstatus" 0 100]]}})
+                 (:body)
+                 (:result)
+                 (:players_loop)
+                 (->> (map (juxt :name :playerid))
+                      (into {}))
+                 (get player-name "FF:FF:FF:FF")))))
+
 (defn lms [& command]
-  (let [resp (http/post
-              (:lms/server *config*)
+  (let [{:lms/keys [server player-name]} *config*
+        player-mac (lms-get-player-mac server player-name)
+        resp (http/post
+              server
               {:accept :json
                :as :json
                :content-type :json
                :form-params
                {:method "slim.request"
-                :params [(:lms/player-mac *config*)
-                         (mapv name command)]}})]
+                :params [player-mac (mapv name command)]}})]
     (:result (:body resp))))
-
-(defn lms-add-player-mac [config]
-  (let [players
-        (-> (http/post
-             (:lms/server config)
-             {:accept :json
-              :as :json
-              :content-type :json
-              :form-params
-              {:id 0
-               :method "slim.request"
-               :params ["" ["serverstatus" 0 100]]}})
-            (:body)
-            (:result)
-            (:players_loop)
-            (->> (map (juxt :name :playerid))
-                 (into {})))]
-    (assoc config :lms/player-mac (players (:lms/player-name config)))))
 
 (defn play-urls [urls]
   (let [player (:lms/player-name *config*)
@@ -242,21 +247,12 @@
       (lms :time (str time)))))
 
 (defn sound-url [sound]
-  (case sound
-    :command-error (str (:sound-prefix *config*) "/error.mp3")
-    :exception (str (:sound-prefix *config*) "/error.mp3")
-    :success (str (:sound-prefix *config*) "/"
-                  (first (shuffle ["chirp1" "chirp2"])) ".mp3")
-    :chime (str (:sound-prefix *config*) "/chirp1.mp3")))
-
-;; (defn tts-url [message]
-;;   (:url (:body (ha-call
-;;                 "/tts_get_url"
-;;                 {:platform "google_translate"
-;;                  :message message}))))
+  (str (:web/address *config*)
+       "/sound/" (name sound)))
 
 (defn tts-url [message]
-  (str (:web/address *config*) "?message=" (ring.util.codec/url-encode message)))
+  (str (:web/address *config*) "/speak?message="
+       (ring.util.codec/url-encode message)))
 
 (defn speak [message]
   (play-urls
@@ -271,15 +267,13 @@
     (let [status
           (:status
            (ha-call (str "/services/" (string/replace service #"\." "/"))
-                    (merge (:ha/args *config*) args)))
-          player (:ha/media-player *config*)]
+                    (merge (:ha/args *config*) args)))]
       (if (= 200 status)
         (when-not (= "play" (:_mode (lms :mode :?)))
           (play-urls [[(sound-url :success) "Success"]]))
         (play-urls [[(sound-url :command-error) "Command error"]])))))
 
 (def timers (atom {}))
-
 
 (defn time-difference [now then]
   (let [delta (abs (.getSeconds (java.time.Duration/between now then)))
@@ -338,17 +332,23 @@
                                              (time-difference now time))))]
                       (speak message)))))
 
-(let [digit-values (set/map-invert digit-values)]
-  (defmethod handle-command :query [{c :command}]
-    (case c
-      :query/time
-      (let [t (LocalTime/now)
-            h (.getHour t)
-            m (.getMinute t)]
-        (speak (str "the time is "
-                    (digit-values (mod h 12)) " "
-                    (when (< m 10) "oh ")
-                    (digit-values m)))))))
+(defmethod handle-command :query [{c :command}]
+  (case c
+    :query/time
+    (speak
+     (let [t (LocalTime/now)
+           h (.getHour t)
+           m (.getMinute t)]
+       (str "the time is "
+            (digit-values (mod h 12)) " "
+            (when (< m 10) "oh ")
+            (if-let [m (digit-values m)]
+              m
+              (str (digit-values (* 10 (int (/ m 10))))
+                   " "
+                   (digit-values (mod m 10)))
+              )))
+     )))
 
 (defmethod handle-command :default [c]
   (log/error "Unknown command" c))
@@ -358,51 +358,71 @@
         raw (.digest algorithm (.getBytes s))]
     (format "%032x" (BigInteger. 1 raw))))
 
-(defn handler [{{message :message} :params}]
-  (let [m (md5 message)
-        f (io/as-file (str "/tmp/" m ".wav"))]
-    (when-not (.exists f)
-      (sh/sh "mimic" "-t" message (str m ".wav") :dir "/tmp"))
-    (-> (rr/file-response (.getCanonicalPath f))
-        (rr/content-type "audio/wav")
-        (rr/header "Content-Disposition" "inline; filename=message.wav"))))
+(defn random-sound [name n]
+  (rr/resource-response
+   (str "/sounds/" name (inc (rand-int n)) ".mp3")))
+
+(defroutes spirit-routes
+  (GET "/speak" [message]
+    (let [m (md5 message)
+          f (io/as-file (str "/tmp/" m ".wav"))]
+      (when-not (.exists f)
+        (sh/sh "mimic" "-t" message (str m ".wav") :dir "/tmp"))
+      (-> (rr/file-response (.getCanonicalPath f))
+          (rr/content-type "audio/wav")
+          (rr/header "Content-Disposition" "inline; filename=message.wav"))))
+
+  (GET "/sound/:s" [s]
+    ;; resource responses
+    (case (keyword s)
+      :success (random-sound "success" 4)
+      :chime   (random-sound "chime" 2)
+      (random-sound "error" 3)))
+    
+  (POST "/hear" [message player-name & params]
+    (let [result ((::grammar *config*) message)]
+      (if (insta/failure? result)
+        (do (log/error
+             "Unable to parse command"
+             message result)
+            (speak (str "I don't understand " message))
+            (-> (rr/response "Command not parseable")
+                (rr/status 500)))
+        
+        (do (log/info "Parsed" message "to" result "reply via" player-name
+                      params)
+            (binding [*config*
+                      (-> *config*
+                          (assoc  :lms/player-name player-name)
+                          (update :ha/args merge params))]
+              (try (handle-command result)
+                   (rr/response "ok")
+                   (catch Exception e
+                     (play-urls [[(sound-url :exception) "Exception!"]])
+                     (log/error e "in handling" result)
+                     (-> (rr/response "error in handler")
+                         (rr/status 500))))))))))
+
+(defn handler [bindings request]
+  (with-bindings bindings
+    (spirit-routes request)))
 
 (defn run-http-server [port]
-  (rj/run-jetty
-   (rd/wrap-defaults
-    #'handler
-    rd/site-defaults)
-   {:port port :join? false}))
+  (let [bindings (get-thread-bindings)]
+    (rj/run-jetty
+     (rd/wrap-defaults
+      ;; not sure whether I need to convey bindings like this
+      (partial #'handler bindings)
+      (assoc-in rd/site-defaults [:security :anti-forgery] false))
+     {:port port :join? true})))
 
 (defn run [{:keys [grammar config]}]
-  (binding [*config* (let [config
-                           (edn/read (java.io.PushbackReader.
-                                      (io/reader (io/as-file config))))]
-                       (lms-add-player-mac config))]
-    (run-http-server (:web/port *config*))
-    
-    (let [parser (load-grammar grammar)]
-      (loop []
-        (let [line (read-line)]
-          (when (string/starts-with? line "COM ")
-            (let [line (subs line 4)
-                  result (parser line)]
-              (if (insta/failure? result)
-                (do (log/error
-                     "Unable to parse command"
-                     line result)
-                    (speak (str "I don't understand " line)))
-                (do (log/info "Parsed" line "to" result)
-                    (try (handle-command result)
-                         (catch Exception e
-                           (play-urls [[(sound-url :exception) "Exception!"]])
-                           (log/error e "in handling" result)))))))
-          
-          (when-not (= line "quit") (recur)))))))
-
+  (binding [*config*
+            (let [grammar (load-grammar grammar)]
+              (-> (edn/read (java.io.PushbackReader. (io/reader (io/as-file config))))
+                  (assoc ::grammar grammar)))]
+    (run-http-server (:web/port *config*))))
 
 (defn -main [grammar config]
   (run {:grammar grammar :config config}))
 
-(comment (def s (run-http-server 12346))
-         (.stop s))
