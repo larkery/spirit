@@ -246,6 +246,7 @@
                                      (:lms/player-name *config*))
         mode (-> (lms :mode :?) :_mode)
         time (-> (lms :time :?) :_time)]
+    (lms :power "1")
     (let [[[url title] & urls] urls]
       (lms :playlist :preview
            (str "url:" url) (str "title:" title))
