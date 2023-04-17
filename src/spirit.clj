@@ -256,7 +256,7 @@
     (lms :play)
     (Thread/sleep
      (case model
-       "RaopBridge" 1500
+       "RaopBridge" 1000
        500))
     
     (loop []
