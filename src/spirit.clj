@@ -384,8 +384,9 @@
     (format "%032x" (BigInteger. 1 raw))))
 
 (defn random-sound [name n]
-  (rr/resource-response
-   (str "/sounds/" name (inc (rand-int n)) ".mp3")))
+  (-> (rr/resource-response
+       (str "/sounds/" name (inc (rand-int n)) ".mp3"))
+      (rr/content-type "audio/mp3")))
 
 (defroutes spirit-routes
   (GET "/speak" [message]
