@@ -233,10 +233,11 @@
       (doseq [[url title] urls]
         (lms :playlist :add
              (str "url:" url) (str "title:" title))))
-    
+
+    (Thread/sleep 1500)
     (loop []
-      (Thread/sleep 300)
-      (when (= "play" (:_mode (lms :mode :?))) (recur)))
+      (when (= "play" (:_mode (lms :mode :?))) (recur))
+      (Thread/sleep 1000))
     
     (lms :playlist :preview "cmd:stop")
     (when (= mode "play")
