@@ -340,9 +340,9 @@
                                                  (swap! timers dissoc next-id)
                                                  (binding [*config* config]
                                                    (play-urls
-                                                    [[(tts-url (format "Timer %s finished" next-id))
-                                                      "Timer finished"]
-                                                     [(sound-url :chime) "Chime"]]))))]))))
+                                                    [[(sound-url :chime) "Chime"]
+                                                     [(tts-url (format "Timer %s finished" next-id))
+                                                      "Timer finished"]]))))]))))
                       (speak (format "Timer %s started for %s" @timer-name (time-difference now then))))
       
       :timer/cancel (do (.close (get @timers n))
