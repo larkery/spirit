@@ -408,6 +408,7 @@
       (random-sound "error" 3)))
     
   (POST "/hear" [message player-name & params]
+    (log/info "hearing" message)
     (let [result ((::grammar *config*) message)]
       (if (insta/failure? result)
         (do (log/error
