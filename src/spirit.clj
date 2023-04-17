@@ -250,9 +250,11 @@
     (let [[[url title] & urls] urls]
       (lms :playlist :preview
            (str "url:" url) (str "title:" title))
+      
       (doseq [[url title] urls]
-        (lms :playlist :add
-             (str "url:" url) (str "title:" title))))
+        (if title
+          (lms :playlist :add url title)
+          (lms :playlist :add url))))
     (lms :play)
     (Thread/sleep
      (case model
@@ -341,8 +343,7 @@
                                                  (binding [*config* config]
                                                    (play-urls
                                                     [[(sound-url :chime) "Chime"]
-                                                     [(tts-url (format "Timer %s finished" next-id))
-                                                      "Timer finished"]]))))]))))
+                                                     [(tts-url (format "Timer %s finished" next-id)) "Timer finished"]]))))]))))
                       (speak (format "Timer %s started for %s" @timer-name (time-difference now then))))
       
       :timer/cancel (do (.close (get @timers n))
