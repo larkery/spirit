@@ -236,8 +236,9 @@
 
     (Thread/sleep 1500)
     (loop []
-      (when (= "play" (:_mode (lms :mode :?))) (recur))
-      (Thread/sleep 1000))
+      (when (= "play" (:_mode (lms :mode :?)))
+        (Thread/sleep 1000)
+        (recur)))
     
     (lms :playlist :preview "cmd:stop")
     (when (= mode "play")
