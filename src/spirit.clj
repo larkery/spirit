@@ -264,7 +264,7 @@
         (when (= "play" (:_mode (lms :mode :?)))
           (Thread/sleep sleep-time)
           (recur)))
-      
+
       (lms :playlist :preview "cmd:stop")
       (when (= mode "play")
         (lms :play "1")
@@ -292,14 +292,15 @@
 (defmethod handle-command :ha [{:keys [command args]}]
   (let [service (name command)
         beep (future
-               (when-not (= "play" (:_mode (lms :mode :?)))
+               (when-not (or (= "play" (:_mode (lms :mode :?)))
+                             (:spirit/quiet args))
                  (play-urls [[(sound-url :success) "Success"]])))]
     
     (let [status
           (future
             (:status
              (ha-call (str "/services/" (string/replace service #"\." "/"))
-                      (merge (:ha/args *config*) args))))
+                      (merge (:ha/args *config*) (dissoc args :spirit/quiet)))))
 
           status @status
           _ @beep]
