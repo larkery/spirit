@@ -303,7 +303,7 @@
 
           status @status
           _ @beep]
-      (if (= 200 status)
+      (if (not= 200 status)
         (play-urls [[(sound-url :command-error) "Command error"]
                     [(tts-url "Error from home assistant") "msg"]])))))
 
