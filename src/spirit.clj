@@ -156,7 +156,7 @@
                     (merge
                      (into {} (for [[l l0 _] captures] [l (fn captures [v] [l0 v])]))
                      {:integer read-string
-                      :hours   (fn [h & [m]] (+ (or m 0) 60 (* 60 h)))
+                      :hours   (fn [h & [m]] (* 60 (+ (or m 0) (* 60 h))))
                       :minutes (fn [m] (* 60 m))
                       :seconds identity
                       :time    identity
@@ -291,15 +291,22 @@
                        ::no-namespace))))
 
 (defmethod handle-command :ha [{:keys [command args]}]
-  (let [service (name command)]
+  (let [service (name command)
+        beep (future
+               (when-not (= "play" (:_mode (lms :mode :?)))
+                 (play-urls [[(sound-url :success) "Success"]])))]
+    
     (let [status
-          (:status
-           (ha-call (str "/services/" (string/replace service #"\." "/"))
-                    (merge (:ha/args *config*) args)))]
+          (future
+            (:status
+             (ha-call (str "/services/" (string/replace service #"\." "/"))
+                      (merge (:ha/args *config*) args))))
+
+          status @status
+          _ @beep]
       (if (= 200 status)
-        (when-not (= "play" (:_mode (lms :mode :?)))
-          (play-urls [[(sound-url :success) "Success"]]))
-        (play-urls [[(sound-url :command-error) "Command error"]])))))
+        (play-urls [[(sound-url :command-error) "Command error"]
+                    [(tts-url "Error from home assistant") "msg"]])))))
 
 (def timers (atom {}))
 
