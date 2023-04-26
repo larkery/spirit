@@ -256,23 +256,22 @@
           (lms :playlist :add url title)
           (lms :playlist :add url))))
     (lms :play)
-    (Thread/sleep
-     (case model
-       "RaopBridge" 1000
-       500))
-    
-    (loop []
-      (when (= "play" (:_mode (lms :mode :?)))
-        (Thread/sleep 1000)
-        (recur)))
-    
-    (lms :playlist :preview "cmd:stop")
-    (when (= mode "play")
-      (lms :play "1")
-      (Thread/sleep 100)
-      (log/info "seek back to" time)
-      (lms :time (str time))
-      (lms :time (str time)))))
+    (let [sleep-time (case model
+                       "RaopBridge" 500
+                       200)]
+      (Thread/sleep sleep-time)
+      (loop []
+        (when (= "play" (:_mode (lms :mode :?)))
+          (Thread/sleep sleep-time)
+          (recur)))
+      
+      (lms :playlist :preview "cmd:stop")
+      (when (= mode "play")
+        (lms :play "1")
+        (Thread/sleep sleep-time)
+        (log/info "seek back to" time)
+        (lms :time (str time))
+        (lms :time (str time))))))
 
 (defn sound-url [sound]
   (str (:web/address *config*)
