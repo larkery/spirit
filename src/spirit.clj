@@ -15,8 +15,9 @@
             [ring.middleware.defaults :as rd]
             [ring.util.response :as rr]
             [ring.util.codec]
-            [compojure.core :refer :all]
-            [compojure.route :as route])
+            [compojure.core :refer [GET POST defroutes]]
+
+            [spirit.weather :refer [query-weather]])
   (:import [java.time Instant LocalTime]
            [java.security MessageDigest])
   (:gen-class))
@@ -88,11 +89,10 @@
                  (sort))
             ]
         (or (first (keep
-                    (fn keep-parses [[ld e]]
-                      (let [s (str up-to " " e " " rest-s)]
-                        (let [r (parse-with-fuzz g s)]
-                          (when-not (insta/failure? r)
-                            r))))
+                    (fn keep-parses [[_ e]]
+                      (let [s (str up-to " " e " " rest-s)
+                            r (parse-with-fuzz g s)]
+                        (when-not (insta/failure? r) r)))
                     options))
             r))
       r)))
@@ -304,7 +304,7 @@
 
           status @status
           _ @beep]
-      (if (not= 200 status)
+      (when-not (= 200 status)
         (play-urls [[(sound-url :command-error) "Command error"]
                     [(tts-url "Error from home assistant") "msg"]])))))
 
@@ -318,7 +318,7 @@
         minutes (mod minutes 60)
         ]
     (cond
-      (and (= 0 seconds minutes hours)) "now"
+      (= 0 seconds minutes hours) "now"
 
       :else
       (cond-> ""
@@ -366,8 +366,11 @@
                                              (time-difference now time))))]
                       (speak message)))))
 
-(defmethod handle-command :query [{c :command}]
+(defmethod handle-command :query [{c :command args :args}]
   (case c
+    :query/weather
+    (speak (query-weather (:day args)))
+    
     :query/time
     (speak
      (let [t (LocalTime/now)

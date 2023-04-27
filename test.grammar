@@ -12,3 +12,5 @@ timer/set: set [a] timer for {time: <time>};
 timer/cancel: cancel timer | cancel timer {n: <integer>};
 timer/list: [what is the] remaining time | [what is the] time left | how much time is left;
 query/time: what time is it | what is the time;
+query/weather {:day 0} : weather | [what is the] weather today | weather now
+query/weather {:day 1} : weather forecast | [what is the] weather tomorrow
