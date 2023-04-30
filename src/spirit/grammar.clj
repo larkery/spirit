@@ -4,10 +4,8 @@
             [clojure.java.io :as io]
             [instaparse.core :as insta]
             [instaparse.combinators :as c]
-            [clj-fuzzy.metrics :refer [dice]]
+            [clj-fuzzy.metrics :refer [jaro]]
             [clojure.tools.logging :as log]))
-
-
 
 (def stopwords (set (string/split-lines (slurp (io/resource "stopwords.txt")))))
 (def metagrammar (insta/parser (io/resource "metagrammar.g")))
@@ -80,7 +78,7 @@
                 (->> reason
                      (filter (comp #{:string} :tag))
                      (map :expecting)
-                     (map (fn find-l [e] [(- 1.0 (dice w e)) e]))
+                     (map (fn find-l [e] [(- 1.0 (jaro w e)) e]))
                      (filter (fn filter-l [%] (< (first %) 0.2)))
                      (sort))
                 ]
@@ -199,7 +197,7 @@
     (let [command (normalize command)
           words (string/split command #" +")
           wake-words (keep-indexed (fn [i w]
-                                     (let [l (dice w "spirit")]
+                                     (let [l (jaro w "spirit")]
                                        (when (> l 0.75) [l i])))
                                    words)
           wake-index (second (first (sort-by first wake-words)))]
