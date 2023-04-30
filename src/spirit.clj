@@ -22,6 +22,8 @@
            [java.security MessageDigest])
   (:gen-class))
 
+
+(def stopwords (set (string/split-lines (slurp (io/resource "stopwords.txt")))))
 (def metagrammar (insta/parser (io/resource "metagrammar.g")))
 (def builtins    (insta/parser (io/resource "builtins.g")))
 (def word-number-re
@@ -63,14 +65,20 @@
         (do (.appendTail matcher sb)
             (.toString sb))))))
 
-(defn normalize [s]
-  (-> s
-      (string/replace #"[,.?! ]+" " ")
-      (replace-word-numbers)
-      (string/replace #"%" " percent")
-      (string/lower-case)
-      (string/replace #" +" " ")
-      (string/trim)))
+(let [stopword-regex (re-pattern
+                      (str "(^| +)"
+                           (string/join "|" stopwords)
+                           "($| +)"
+                           ))]
+  (defn normalize [s]
+    (-> s
+        (string/replace #"[,.?! ]+" " ")
+        (replace-word-numbers)
+        (string/replace #"%" " percent")
+        (string/lower-case)
+        (string/replace stopword-regex "")
+        (string/replace #" +" " ")
+        (string/trim))))
 
 (defn parse-with-fuzz [g s]
   (let [s (normalize s)
@@ -100,14 +108,14 @@
 (defn load-grammar [filename]
   (let [g (metagrammar (slurp (io/as-file filename)))
         _ (when (insta/failure? g) (log/error "Parsing" filename g))
-        wrap-strings #(map (fn wrap-strings [i]
-                             (if (string? i)
-                               (c/cat (c/hide (c/regexp #"\s*"))
-                                      (c/string i)
-                                      (c/hide (c/regexp #"\s*")))
-                               
-                               i))
-                           %)
+        wrap-strings #(keep (fn wrap-string [i]
+                              (cond (stopwords i) nil
+                                    (string? i)
+                                    (c/cat (c/hide (c/regexp #"\s*"))
+                                           (c/string i)
+                                           (c/hide (c/regexp #"\s*")))
+                                    :else i))
+                            %)
         
         extra (atom {})
         ctr (atom 0)
@@ -241,12 +249,16 @@
                 :params [player-mac (mapv name command)]}})]
     (:result (:body resp))))
 
+
+
 (defn play-urls [urls]
   (let [model  (lms-get-player-model (:lms/server *config*)
                                      (:lms/player-name *config*))
         mode (-> (lms :mode :?) :_mode)
-        time (-> (lms :time :?) :_time)]
+        time (-> (lms :time :?) :_time)
+        volume (-> (lms :mixer :volume :?) :_volume)]
     (lms :power "1")
+    (lms :mixer :volume "75")
     (let [[[url title] & urls] urls]
       (lms :playlist :preview
            (str "url:" url) (str "title:" title))
@@ -266,6 +278,7 @@
           (recur)))
 
       (lms :playlist :preview "cmd:stop")
+      (lms :mixer :volume volume)
       (when (= mode "play")
         (lms :play "1")
         (Thread/sleep sleep-time)
