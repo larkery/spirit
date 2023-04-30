@@ -132,21 +132,21 @@
       (rr/content-type "audio/mp3")))
 
 (defn- handle-message [message player-name params]
-  (let [result ((::grammar *config*) message)]
-    (if (insta/failure? result)
-      (do (log/error
-           "Unable to parse command"
-           message result)
-          (speak (str "I don't understand " message))
-          (-> (rr/response "Command not parseable")
-              (rr/status 500)))
-      
-      (do (log/info "Parsed" message "to" result "reply via" player-name
-                    params)
-          (binding [*config*
-                    (-> *config*
-                        (assoc  :lms/player-name player-name)
-                        (update :ha/args merge params))]
+  (binding [*config*
+            (-> *config*
+                (assoc  :lms/player-name player-name)
+                (update :ha/args merge params))]
+    
+    (let [result ((::grammar *config*) message)]
+      (if (insta/failure? result)
+        (do (log/error
+             "Unable to parse command"
+             message result)
+            (speak (str "I don't understand " message))
+            (-> (rr/response "Command not parseable")
+                (rr/status 500)))
+        
+        (do (log/info "Parsed" message "to" result "reply via" player-name params)
             (try (handle-command result)
                  (rr/response "ok")
                  (catch Exception e
