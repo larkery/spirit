@@ -67,32 +67,33 @@
         (string/replace #" +" " ")
         (string/trim))))
 
-(defn parse-with-fuzz [g s]
+(defn parse-with-fuzz [g s n]
   (let [s (normalize s)
         r (g s)]
     (if (insta/failure? r)
-      (let [{:keys [index reason]} (insta/get-failure r)
-            up-to  (subs s 0 index)
-            rest-s (subs s index)
-            [w rest-s] (string/split rest-s #" " 2)
-            options
-            (->> reason
-                 (filter (comp #{:string} :tag))
-                 (map :expecting)
-                 (map (fn find-l [e] [(- 1.0 (dice w e)) e]))
-                 (filter (fn filter-l [%] (< (first %) 0.2)))
-                 (sort))
-            ]
-        (println "PARSE" s "FAIL" options)
-        (or (first (keep
-                    (fn keep-parses [[_ e]]
-                      (let [s (str up-to " " e " " rest-s)
-                            _ (println "RETRY" s)
-                            r (parse-with-fuzz g s)]
-                        
-                        (when-not (insta/failure? r) r)))
-                    options))
-            r))
+      (if (> n 4) r
+          (let [{:keys [index reason]} (insta/get-failure r)
+                up-to  (subs s 0 index)
+                rest-s (subs s index)
+                [w rest-s] (string/split rest-s #" " 2)
+                options
+                (->> reason
+                     (filter (comp #{:string} :tag))
+                     (map :expecting)
+                     (map (fn find-l [e] [(- 1.0 (dice w e)) e]))
+                     (filter (fn filter-l [%] (< (first %) 0.2)))
+                     (sort))
+                ]
+            (println "PARSE" s "FAIL" options)
+            (or (first (keep
+                        (fn keep-parses [[_ e]]
+                          (let [s (str up-to " " e " " rest-s)
+                                _ (println "RETRY" s)
+                                r (parse-with-fuzz g s (inc n))]
+                            
+                            (when-not (insta/failure? r) r)))
+                        options))
+                r)))
       r)))
 
 
@@ -186,7 +187,7 @@
                                   {:command (first hs)
                                    :args    (into {} (remove string? (rest hs)))})})
 
-                    (parse-with-fuzz parser line))]
+                    (parse-with-fuzz parser line 0))]
 
         (-> (update result :args (fn merge-args [%]
                                    (merge (command-args (:command result)) %)))
