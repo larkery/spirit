@@ -74,7 +74,7 @@
                            ))]
   (defn normalize [s]
     (-> s
-        (string/replace #"\(.+\)" "")
+        (string/replace #"[(\[].+?[)\]]" "")
         (string/replace #"[,.?! ]+" " ")
         (replace-word-numbers)
         (string/replace #"%" " percent")
