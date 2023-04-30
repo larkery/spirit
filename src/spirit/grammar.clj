@@ -61,7 +61,7 @@
         (replace-word-numbers)
         (string/replace #"%" " percent")
         (string/lower-case)
-        (string/replace stopword-regex "")
+        (string/replace stopword-regex " ")
         (string/replace #" +" " ")
         (string/trim))))
 
@@ -205,6 +205,6 @@
 (comment
   (builtins "20 past 9" :start :time)
   (let [g (load-grammar "test.grammar")]
-    (g "set alarm for 9 30 pm")
+    (g "set alarm for 8")
     )
   )
