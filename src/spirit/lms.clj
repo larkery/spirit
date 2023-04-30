@@ -21,7 +21,7 @@
               (into {}))
          (get player-name)))))
 
-(defn command [server-name player-name & command]
+(defn command [server-name player-name & args]
   (if-let [player (player-by-name server-name player-name)]
     (-> (http/post
          server-name
@@ -30,7 +30,7 @@
           :content-type :json
           :form-params
           {:method "slim.request"
-           :params [(:playerid player) (mapv name command)]}})
+           :params [(:playerid player) (mapv name args)]}})
         (:body)
         (:result))
     (log/warn "No player found by name" player-name "at" server-name)))

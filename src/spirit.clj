@@ -74,9 +74,9 @@
 
 (defmethod handle-command :ha [{:keys [command args]}]
   (let [service (name command)
-        {:lms/keys [server-name player-name]} *config*
         beep (future
-               (when-not (or (lms/is-playing? server-name player-name)
+               (when-not (or (lms/is-playing? (:lms/server-name *config*)
+                                              (:lms/player-name *config*))
                              (:spirit/quiet args))
                  (play-sounds :success)))]
     
