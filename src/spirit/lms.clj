@@ -38,15 +38,14 @@
 (defn play-urls [server-name player-name urls]
   (let [lms    (fn [& r] (apply command server-name player-name r))
         model  (:modelname (player-by-name server-name player-name))
-        mode   (-> (command server-name player-name :mode :?) :_mode)
-        time   (-> (command server-name player-name :time :?) :_time)
-        volume (-> (command server-name player-name :mixer :volume :?) :_volume)]
+        mode   (-> (lms :mode :?) :_mode)
+        time   (-> (lms :time :?) :_time)
+        volume (-> (lms :mixer :volume :?) :_volume)]
 
         (lms :power "1")
     (lms :mixer :volume "75")
     (let [[[url title] & urls] urls]
-      (lms :playlist :preview
-           (str "url:" url) (str "title:" title))
+      (lms :playlist :preview (str "url:" url) (str "title:" title))
       
       (doseq [[url title] urls]
         (if title
