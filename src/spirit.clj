@@ -40,13 +40,17 @@
        (ring.util.codec/url-encode message)))
 
 (defn play-sounds [& sounds]
-  (lms/play-urls
-   (:lms/server-name *config*)
-   (:lms/player-name *config*)
-   (for [sound sounds]
-     (if (keyword? sound)
-       [(sound-url sound) (name sound)]
-       [(tts-url sound) sound]))))
+  (try (lms/play-urls
+        (:lms/server-name *config*)
+        (:lms/player-name *config*)
+        (doall
+         (for [sound sounds]
+           (if (keyword? sound)
+             [(sound-url sound) (name sound)]
+             [(tts-url sound) sound]))))
+       (catch Exception e
+         (log/error e "Playing sounds" *config*)
+         )))
 
 (defn ha-call [url body]
   (let [resp (http/post
