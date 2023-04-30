@@ -50,9 +50,9 @@
             (.toString sb))))))
 
 (let [stopword-regex (re-pattern
-                      (str "(^| +)"
+                      (str "(^| +)("
                            (string/join "|" stopwords)
-                           "($| +)"
+                           ")($| +)"
                            ))]
   (defn normalize [s]
     (-> s
@@ -64,8 +64,6 @@
         (string/replace stopword-regex "")
         (string/replace #" +" " ")
         (string/trim))))
-
-
 
 (defn parse-with-fuzz [g s]
   (let [s (normalize s)
@@ -83,10 +81,13 @@
                  (filter (fn filter-l [%] (< (first %) (max 5 (/ (count (second %)) 2)))))
                  (sort))
             ]
+        (println "PARSE" s "FAIL" options)
         (or (first (keep
                     (fn keep-parses [[_ e]]
                       (let [s (str up-to " " e " " rest-s)
+                            _ (println "RETRY" s)
                             r (parse-with-fuzz g s)]
+                        
                         (when-not (insta/failure? r) r)))
                     options))
             r))
@@ -152,14 +153,36 @@
       (let [result (insta/transform
                     (merge
                      (into {} (for [[l l0 _] captures] [l (fn captures [v] [l0 v])]))
-                     {:integer read-string
-                      :hours   (fn [h & [m]] (* 60 (+ (or m 0) (* 60 h))))
-                      :minutes (fn [m] (* 60 m))
-                      :seconds identity
-                      :time    identity
-                      :root    (fn root [hs]
-                                 {:command (first hs)
-                                  :args    (into {} (remove string? (rest hs)))})})
+                     {:integer  read-string
+                      :hours    (fn [h & [m]] (* 60 (+ (or m 0) (* 60 h))))
+                      :minutes  (fn [m] (* 60 m))
+                      :seconds  identity
+                      :duration identity
+                      :time     (fn [& [a b c]]
+                                  (let [mins
+                                        (+ a
+                                           (cond
+                                             (number? b) b
+                                             (= b "pm") (* 12 60)
+                                             :else 0)
+                                           (if (= c "pm") (* 12 60) 0))]
+                                    (format "%02d:%02d:00"
+                                            (int (/ mins 60))
+                                            (int (mod mins 60)))))
+                      :hour_of_day (fn [i] (* i 60))
+                      :minute_of_hour identity
+                      :minute_prefix (fn [amount direction]
+                                        (let [amount
+                                              (case amount
+                                                "quarter" 15
+                                                "half" 30
+                                                amount)]
+                                          (case direction
+                                            "to"  (- amount)
+                                            "past" amount)))
+                      :root     (fn root [hs]
+                                  {:command (first hs)
+                                   :args    (into {} (remove string? (rest hs)))})})
 
                     (parse-with-fuzz parser line))]
 
@@ -178,3 +201,10 @@
                                    words)
           wake-index (second (first (sort-by first wake-words)))]
       (when wake-index  (string/join " " (drop (inc wake-index) words))))))
+
+(comment
+  (builtins "20 past 9" :start :time)
+  (let [g (load-grammar "test.grammar")]
+    (g "set alarm for 9 30 pm")
+    )
+  )
