@@ -71,5 +71,7 @@
         (lms :time (str time))))))
 
 (defn is-playing? [server-name player-name]
+  {:pre [(string? server-name)
+         (string? player-name)]}
   (= "play" (:_mode (command server-name player-name :mode :?))))
 
