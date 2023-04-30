@@ -41,7 +41,7 @@
 
 (defn play-sounds [& sounds]
   (try (lms/play-urls
-        (:lms/server-name *config*)
+        (:lms/server *config*)
         (:lms/player-name *config*)
         (doall
          (for [sound sounds]
@@ -75,8 +75,7 @@
 (defmethod handle-command :ha [{:keys [command args]}]
   (let [service (name command)
         beep (future
-               (log/info "should be seeing this"  *config*)
-               (when-not (or (lms/is-playing? (:lms/server-name *config*)
+               (when-not (or (lms/is-playing? (:lms/server *config*)
                                               (:lms/player-name *config*))
                              (:spirit/quiet args))
                  (play-sounds :success)))]
