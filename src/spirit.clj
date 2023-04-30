@@ -17,7 +17,9 @@
             [ring.util.codec]
             [compojure.core :refer [GET POST defroutes]]
 
-            [spirit.weather :refer [query-weather]])
+            [spirit.weather :refer [query-weather]]
+            [spirit.whisper :refer [run-whisper]]
+            [spirit.whisper :as whisper])
   (:import [java.time Instant LocalTime]
            [java.security MessageDigest])
   (:gen-class))
@@ -30,7 +32,7 @@
   (let [digit "(one|two|three|four|five|six|seven|eight|nine)"
         ten   "(ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)"
         tens  "(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)"
-        small (format "((?<tens>%s)( +(?<tendigit>%s))?|(?<digit>%s)|(?<ten>%s))" tens digit digit ten)
+        small (format "(^|[^a-z])((?<tens>%s)( +(?<tendigit>%s))?|(?<digit>%s)|(?<ten>%s))($|[^a-z])" tens digit digit ten)
         ]
     (re-pattern small)))
 
@@ -60,7 +62,7 @@
                     ten   (digit-values ten))
               
               ]
-          (.appendReplacement matcher sb (str rep))
+          (.appendReplacement matcher sb (str " " rep " "))
           (recur))
         (do (.appendTail matcher sb)
             (.toString sb))))))
@@ -72,6 +74,7 @@
                            ))]
   (defn normalize [s]
     (-> s
+        (string/replace #"\(.+\)" "")
         (string/replace #"[,.?! ]+" " ")
         (replace-word-numbers)
         (string/replace #"%" " percent")
@@ -413,6 +416,41 @@
        (str "/sounds/" name (inc (rand-int n)) ".mp3"))
       (rr/content-type "audio/mp3")))
 
+(defn- handle-message [message player-name params]
+  (let [result ((::grammar *config*) message)]
+    (if (insta/failure? result)
+      (do (log/error
+           "Unable to parse command"
+           message result)
+          (speak (str "I don't understand " message))
+          (-> (rr/response "Command not parseable")
+              (rr/status 500)))
+      
+      (do (log/info "Parsed" message "to" result "reply via" player-name
+                    params)
+          (binding [*config*
+                    (-> *config*
+                        (assoc  :lms/player-name player-name)
+                        (update :ha/args merge params))]
+            (try (handle-command result)
+                 (rr/response "ok")
+                 (catch Exception e
+                   (play-urls [[(sound-url :exception) "Exception!"]])
+                   (log/error e "in handling" result)
+                   (-> (rr/response "error in handler")
+                       (rr/status 500)))))))))
+
+(defn- detect-wakeword [command]
+  (when command
+    (let [command (normalize command)
+          words (string/split command #" +")
+          wake-words (keep-indexed (fn [i w]
+                                     (let [l (levenshtein w "spirit")]
+                                       (when (< l 2) [l i])))
+                                   words)
+          wake-index (second (first (sort-by first wake-words)))]
+      (when wake-index  (string/join " " (drop (inc wake-index) words))))))
+
 (defroutes spirit-routes
   (GET "/speak" [message]
     (let [m (md5 message)
@@ -429,31 +467,25 @@
       :success (random-sound "success" 4)
       :chime   (random-sound "chime" 2)
       (random-sound "error" 3)))
-    
-  (POST "/hear" [message player-name & params]
+
+  (POST "/hear" [player-name & params :as request]
+    (let [temp-file (.toFile (java.nio.file.Files/createTempFile
+                              "hear" ".wav"
+                              (into-array java.nio.file.attribute.FileAttribute [])))]
+      (try
+        (io/copy (:body request) temp-file)
+        (let [message (run-whisper temp-file)
+              command (detect-wakeword message)]
+          (log/info message "=>" command)
+          (if command
+            (handle-message command player-name params)
+            (rr/response (str "no wakeword in " message "\n"))))
+        (finally
+          (io/delete-file temp-file true)))))
+  
+  (POST "/read" [message player-name & params]
     (log/info "hearing" message)
-    (let [result ((::grammar *config*) message)]
-      (if (insta/failure? result)
-        (do (log/error
-             "Unable to parse command"
-             message result)
-            (speak (str "I don't understand " message))
-            (-> (rr/response "Command not parseable")
-                (rr/status 500)))
-        
-        (do (log/info "Parsed" message "to" result "reply via" player-name
-                      params)
-            (binding [*config*
-                      (-> *config*
-                          (assoc  :lms/player-name player-name)
-                          (update :ha/args merge params))]
-              (try (handle-command result)
-                   (rr/response "ok")
-                   (catch Exception e
-                     (play-urls [[(sound-url :exception) "Exception!"]])
-                     (log/error e "in handling" result)
-                     (-> (rr/response "error in handler")
-                         (rr/status 500))))))))))
+    (handle-message message player-name params)))
 
 (defn handler [bindings request]
   (with-bindings bindings
