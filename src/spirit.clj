@@ -68,23 +68,35 @@
 (defn speak [message]
   (play-sounds message))
 
+
 (defmulti handle-command
   (fn [c] (keyword (or (namespace (:command c))
                        ::no-namespace))))
 
-(defmethod handle-command :ha [{:keys [command args]}]
+(defmethod handle-command :ha [{:keys [command args] :as c}]
   (let [service (name command)
         beep (future
-               (when-not (or (lms/is-playing? (:lms/server *config*)
-                                              (:lms/player-name *config*))
-                             (:spirit/quiet args))
-                 (play-sounds :success)))]
-    
+               (when-not (and
+                          (not (:spirit/say args))
+                          (or (lms/is-playing? (:lms/server *config*)
+                                               (:lms/player-name *config*))
+                              (:spirit/quiet args)))
+                 (let [msg (:spirit/say args :success)]
+                   (play-sounds
+                    (if (string? msg)
+                      (reduce-kv
+                       (fn [msg k v] (string/replace msg (str k) (str v)))
+                       msg
+                       args)
+                      msg)))))
+        ]
     (let [status
           (future
             (:status
              (ha-call (str "/services/" (string/replace service #"\." "/"))
-                      (merge (:ha/args *config*) (dissoc args :spirit/quiet)))))
+                      (merge (:ha/args *config*) (dissoc args
+                                                         :spirit/quiet
+                                                         :spirit/say)))))
 
           status @status
           _ @beep]
@@ -178,6 +190,7 @@
                               (into-array java.nio.file.attribute.FileAttribute [])))]
       (try
         (io/copy (:body request) temp-file)
+        (log/info "running whisper on" temp-file)
         (let [message (run-whisper temp-file)
               command (grammar/detect-wakeword message)]
           (log/info message "=>" command)
