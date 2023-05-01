@@ -79,7 +79,7 @@
                      (filter (comp #{:string} :tag))
                      (map :expecting)
                      (map (fn find-l [e] [(- 1.0 (jaro w e)) e]))
-                     (filter (fn filter-l [%] (< (first %) 0.2)))
+                     (filter (fn filter-l [%] (< (first %) 0.35)))
                      (sort))
                 ]
             (println "PARSE" s "FAIL" options)
