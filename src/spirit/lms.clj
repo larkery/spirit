@@ -42,11 +42,10 @@
         time   (-> (lms :time :?) :_time)
         volume (-> (lms :mixer :volume :?) :_volume)]
 
-        (lms :power "1")
-    (lms :mixer :volume "75")
+    (lms :power "1")
     (let [[[url title] & urls] urls]
       (lms :playlist :preview (str "url:" url) (str "title:" title))
-      
+      (lms :mixer :volume "75")
       (doseq [[url title] urls]
         (if title
           (lms :playlist :add url title)
